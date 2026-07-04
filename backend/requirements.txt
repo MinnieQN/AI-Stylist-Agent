@@ -4,3 +4,15 @@ google-genai
 python-dotenv==1.0.1
 pydantic==2.9.0
 python-multipart==0.0.12
+Pillow==11.0.0
+transformers
+torch
+numpy
+langgraph
+langchain-google-genai
+langchain-core
+qdrant-client
+pymongo
+diffusers
+accelerate
+google-search-results

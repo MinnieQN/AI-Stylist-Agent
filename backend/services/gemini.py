@@ -1,56 +1,59 @@
 import os
-import json
-from google import genai
+import base64
+import io
+import torch
+from PIL import Image
+from diffusers import StableDiffusionInstructPix2PixPipeline
 
+_pipe = None
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+def _get_pipe():
+    global _pipe
+    if _pipe is None:
+        print("Loading instruct-pix2pix model (first call only — ~3GB download)...")
+        # low_cpu_mem_usage=False loads weights directly into RAM, avoiding
+        # the meta-tensor error that occurs when accelerate is installed
+        _pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(
+            "timbrooks/instruct-pix2pix",
+            torch_dtype=torch.float32,
+            safety_checker=None,
+            low_cpu_mem_usage=False,
+        )
+        # use Apple Metal if available, otherwise CPU
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        _pipe = _pipe.to(device)
+        print(f"Model loaded on {device}.")
+    return _pipe
 
-'''
-Function to generate 3 style recommendations and reasonings using Gemini API
-@param occasion: a string occasion input by the user
-@return: a list of dictionaries, each containing a style recommendation and its one-sentence reasoning
-'''
-def get_style_recommendations(occasion: str) -> list[dict]:
-    prompt = f"""
-    A user is attending "{occasion}".
-    Generate exactly 3 different outfit styles suitable for this occasion.
-    Each style should be distinct in character (e.g. classic, modern, smart casual).
-    Respond with only a JSON array of 3 objects and reasonings should be concise (1 sentence).
-    Each object should have the following format:
-    [
-        {{
-        "style_name": "Classic Professional",
-        "description": "A timeless, polished look",
-        "key_pieces": ["navy blazer", "white dress shirt", "grey trousers", "oxford shoes"],
-        "reasoning": "This style conveys authority and professionalism."
-        }},
-        {{
-        "style_name": "Modern Business",
-        "description": "...",
-        "key_pieces": ["..."],
-        "reasoning": "..."
-        }},
-        {{
-        "style_name": "Smart Casual",
-        "description": "...",
-        "key_pieces": ["..."],
-        "reasoning": "..."
-        }}
-    ]
-    """
-    
-    # call Gemini API to generate style recommendations
-    # new SDK is synchronous, so without async/awai
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
+"""
+Generate a try-on image by editing the person's photo with an outfit instruction
+using instruct-pix2pix running locally via Apple Metal (MPS).
+Returns a base64-encoded PNG string.
+"""
+def generate_tryon_image(filepath: str, style: dict, occasion: str) -> str:
+    style_name = style["style_name"]
+    key_pieces = ", ".join(style["key_pieces"])
+    description = style["description"]
+
+    instruction = (
+        f"Change this person's clothing to a {style_name} outfit: {description}. "
+        f"Key pieces: {key_pieces}. Occasion: {occasion}. "
+        f"Keep the person's face, hair, skin tone, and body proportions exactly as they are. "
+        f"Keep the background exactly as it is. Only replace the clothing."
     )
 
-    # extract the text response and parse it as JSON
-    text = response.text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
+    image = Image.open(filepath).convert("RGB")
+    image = image.resize((384, 384))
 
-    return json.loads(text)
+    pipe = _get_pipe()
+    result = pipe(
+        instruction,
+        image=image,
+        num_inference_steps=4,
+        image_guidance_scale=1.5,
+        guidance_scale=7.5,
+    ).images[0]
+
+    buf = io.BytesIO()
+    result.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()

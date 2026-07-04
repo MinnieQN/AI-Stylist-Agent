@@ -1,3 +1,10 @@
+/**
+ * Function to display each style recommendation card with details and "Choose this style" button
+ * @param {Object} props.style - The style recommendation object containing style_name, description, key_pieces, and reasoning
+ * @param {number} props.index - The index of the style recommendation (used for display purposes)ß
+ * @param {function} props.onSelect - The function to call when the user selects this style
+ * @returns {JSX.Element} The JSX element representing the style card
+ */
 export default function StyleCard({ style, index, onSelect }) {
   return (
     <div className="bg-[#FFFAF3] border border-[#D8C3A5] rounded-2xl p-6 flex flex-col gap-4">
@@ -37,7 +44,7 @@ export default function StyleCard({ style, index, onSelect }) {
 
       {/* Button */}
       <button
-        onClick={() => onSelect(style)}
+        onClick={() => onSelect(style, index)}
         className="w-full bg-[#B8875B] hover:bg-[#8A5A3B] text-[#FFFAF3] py-2.5 rounded-lg text-sm font-medium transition-colors"
       >
         Choose this style

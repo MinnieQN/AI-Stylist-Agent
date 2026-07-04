@@ -6,3 +6,7 @@ backend/venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# uploaded images
+backend/uploads/*
+!backend/uploads/.gitkeep
