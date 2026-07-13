@@ -25,14 +25,15 @@ def run(state: dict) -> dict:
     vector = embed_text(style_direction)
 
     # search only this user's liked outfits
-    hits = client.search(
+    # (query_points replaces search in qdrant-client >= 1.9)
+    hits = client.query_points(
         collection_name=LIKED_OUTFITS,
-        query_vector=vector,
+        query=vector,
         query_filter=Filter(
             must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))]
         ),
         limit=3,
-    )
+    ).points
 
     # keep only hits above the grounding threshold,
     # and fetch each one's full record from MongoDB by shared id

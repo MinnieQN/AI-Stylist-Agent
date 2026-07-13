@@ -1,11 +1,16 @@
 import os
 import base64
 import io
+import threading
 import torch
 from PIL import Image
 from diffusers import StableDiffusionInstructPix2PixPipeline
 
 _pipe = None
+# one generation at a time: the pipeline's scheduler keeps per-run state,
+# so concurrent runs corrupt each other (seen as "index 5 is out of bounds
+# for dimension 0 with size 5" when duplicate requests overlapped)
+_pipe_lock = threading.Lock()
 
 def _get_pipe():
     global _pipe
@@ -45,14 +50,15 @@ def generate_tryon_image(filepath: str, style: dict, occasion: str) -> str:
     image = Image.open(filepath).convert("RGB")
     image = image.resize((384, 384))
 
-    pipe = _get_pipe()
-    result = pipe(
-        instruction,
-        image=image,
-        num_inference_steps=4,
-        image_guidance_scale=1.5,
-        guidance_scale=7.5,
-    ).images[0]
+    with _pipe_lock:
+        pipe = _get_pipe()
+        result = pipe(
+            instruction,
+            image=image,
+            num_inference_steps=4,
+            image_guidance_scale=1.5,
+            guidance_scale=7.5,
+        ).images[0]
 
     buf = io.BytesIO()
     result.save(buf, format="PNG")

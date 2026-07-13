@@ -3,7 +3,7 @@ from typing import TypedDict, Optional
 
 class AgentState(TypedDict, total=False):
     """
-    Shared state flowing through the 5-node agent graph.
+    Shared state flowing through the 4-node agent graph.
     total=False: fields are filled in progressively as nodes run.
     Each node returns ONLY the keys it changes.
     """

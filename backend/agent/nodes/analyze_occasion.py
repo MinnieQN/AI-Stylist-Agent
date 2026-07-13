@@ -7,6 +7,10 @@ from shared.retry import generate_with_retry
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# agent model — set GEMINI_MODEL in .env; the alias default tracks the latest
+# stable Flash so a model retirement never hard-breaks the agent again
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+
 '''
 Node: analyze_occasion
 Reads state["occasion"] and makes two judgments in one Gemini call:
@@ -66,7 +70,7 @@ def run(state: dict) -> dict:
 
     response = generate_with_retry(
         client,
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0),

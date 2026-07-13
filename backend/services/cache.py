@@ -4,7 +4,8 @@ from services.qdrant import client, LIKED_OUTFITS
 from services.mongo import liked_outfits
 from services.embed import embed_texts
 
-CACHE_THRESHOLD = 0.95
+# configurable via .env — was hardcoded, which silently ignored the env var
+CACHE_THRESHOLD = float(os.getenv("CACHE_THRESHOLD", "0.90"))
 
 """
 Semantic cache lookup for a previously liked outfit.

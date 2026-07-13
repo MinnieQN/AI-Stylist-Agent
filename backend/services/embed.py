@@ -25,3 +25,12 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     )
     # one embedding per input text — return all their .values
     return [e.values for e in response.embeddings]
+
+
+"""
+Convenience wrapper: embed a single string.
+@param text: the text to embed
+@return: one 3072-float vector
+"""
+def embed_text(text: str) -> list[float]:
+    return embed_texts([text])[0]

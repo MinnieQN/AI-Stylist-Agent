@@ -7,6 +7,10 @@ from shared.retry import generate_with_retry
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# agent model — set GEMINI_MODEL in .env; the alias default tracks the latest
+# stable Flash so a model retirement never hard-breaks the agent again
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+
 """
 Node: critique_recommendations
 Generator-critic judge. Reviews the 3 recommendations that reason_outfit
@@ -57,9 +61,9 @@ def run(state: dict) -> dict:
        (e.g. classic vs modern vs relaxed)? Fail if two or more are
        near-identical in aesthetic, key pieces, or description.
     2. Constraint fit: does each style match the analysis "formality",
-       and do each style's key_pieces cover ALL categories listed in
-       "needed_items"? Fail if any style misses a category or is
-       clearly the wrong formality.
+       and do each style's key_pieces_categorized cover ALL categories
+       listed in "needed_items"? Fail if any needed category has no
+       pieces or a style is clearly the wrong formality.
     {history_section}
 
     Respond with only a JSON object:
@@ -80,7 +84,7 @@ def run(state: dict) -> dict:
 
     response = generate_with_retry(
         client,
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0),

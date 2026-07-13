@@ -7,6 +7,10 @@ from shared.retry import generate_with_retry
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# agent model — set GEMINI_MODEL in .env; the alias default tracks the latest
+# stable Flash so a model retirement never hard-breaks the agent again
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+
 """
 Node: reason_outfit
 Generates 3 distinct outfit recommendations from the occasion analysis,
@@ -69,19 +73,23 @@ def run(state: dict) -> dict:
         {{
             "style_name": "Business Casual",
             "description": "A relaxed yet polished aesthetic with clean lines and neutral tones — structured-but-soft layers, minimal accessories, and footwear that bridges casual and professional.",
-            "key_pieces": ["navy blazer", "white dress shirt", "grey trousers", "oxford shoes"],
+            "key_pieces_categorized": {{
+                "top": ["navy blazer", "white dress shirt"],
+                "bottom": ["grey trousers"],
+                "shoes": ["oxford shoes"]
+            }},
             "reasoning": "This style conveys authority and professionalism."
         }},
         {{
             "style_name": "...",
             "description": "...",
-            "key_pieces": ["..."],
+            "key_pieces_categorized": ["...": ...],
             "reasoning": "..."
         }},
         {{
             "style_name": "...",
             "description": "...",
-            "key_pieces": ["..."],
+            "key_pieces_categorized": ["...": ...],
             "reasoning": "..."
         }}
     ]
@@ -89,15 +97,19 @@ def run(state: dict) -> dict:
     - "style_name" should be a short label for the style (e.g. "Business
       Casual", "Modern Minimalist", "Smart Casual").
     - "description" should be a 2-3 sentence description of the aesthetic.
-    - "key_pieces" should be a list of specific garment items that
-      together cover all categories in "needed_items" from the analysis.
+    - "key_pieces_categorized" must be a JSON object with EXACTLY these
+      keys: "top", "bottom", "shoes". Each value is a list of specific
+      garment items. Outerwear and accessories go under "top". Together
+      the pieces must cover all categories in "needed_items" from the
+      analysis. If a category is not needed for this occasion, use an
+      empty list for it.
     - "reasoning" should be one concise sentence explaining why this
       style suits the occasion.
     """
 
     response = generate_with_retry(
         client,
-        model="gemini-2.5-flash",
+        model=GEMINI_MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(thinking_budget=0),
@@ -109,5 +121,11 @@ def run(state: dict) -> dict:
     if not match:
         raise ValueError(f"No JSON array found in reason_outfit response: {text[:200]}")
     recommendations = json.loads(match.group())
+    # derive flat key_pieces from the categorized dict
+    for style in recommendations:
+        categorized = style.get("key_pieces_categorized") or {}
+        style["key_pieces"] = [
+            piece for pieces in categorized.values() for piece in pieces
+        ]
 
     return {"recommendations": recommendations}

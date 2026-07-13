@@ -17,7 +17,18 @@ export default function OccasionPage() {
     const [error, setError] = useState(null);
     const [cacheSuggestion, setCacheSuggestion] = useState(null);
     const [clarification, setClarification] = useState(null);
+    // style preference — initialized from localStorage so the choice
+    // persists across visits; defaults to "no preference"
+    const [stylePreference, setStylePreference] = useState(
+        () => localStorage.getItem('stylePreference') || 'no preference'
+    );
     const navigate = useNavigate();
+
+    // select a style preference pill and remember it for future visits
+    function handleSelectPreference(option) {
+        setStylePreference(option);
+        localStorage.setItem('stylePreference', option);
+    }
 
     // function to handle user submission
     async function handleSubmit(e) {
@@ -29,8 +40,11 @@ export default function OccasionPage() {
         setError(null);
 
         try {
-            // make POST request to backend with the occasion input
-            const response = await api.post('/styles', { occasion });
+            // make POST request to backend with the occasion and preference
+            const response = await api.post('/styles', {
+                occasion,
+                style_preference: stylePreference,
+            });
 
             if (response.data.needs_clarification) {
                 // agent couldn't parse the occasion — show its question inline
@@ -79,6 +93,7 @@ export default function OccasionPage() {
         try {
             const response = await api.post('/styles', {
                 occasion: cacheSuggestion.occasion,
+                style_preference: stylePreference,
                 skip_cache: true,   // force the agent, bypass cache
             });
 
@@ -115,6 +130,28 @@ export default function OccasionPage() {
                         className="px-4 py-3 rounded-lg border border-[#CBB89D] bg-[#FFFCF8] outline-none focus:ring-2 focus:ring-[#B8875B]"
                     />
 
+                    {/* Style preference selector — persists via localStorage */}
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm text-[#5A4040]">Style preference</span>
+                        <div className="flex gap-2">
+                            {['womenswear', 'menswear', 'no preference'].map((option) => (
+                                <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => handleSelectPreference(option)}
+                                    className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+                                        stylePreference === option
+                                            ? 'bg-[#F0E6D8] border border-[#B8875B] text-[#5A3E2B]'
+                                            : 'bg-[#FFFCF8] border border-[#CBB89D] text-[#3B2F2F] hover:bg-[#F0E6D8]'
+                                    }`}
+                                >
+                                    {option}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Submit button, disabled while loading to prevent multiple submissions */}
                     <button
                         type="submit"
                         disabled={loading}
@@ -146,3 +183,35 @@ export default function OccasionPage() {
                         <img
                             src={`data:image/png;base64,${cacheSuggestion.image}`}
                             alt="A look you liked before"
+                            className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                        />
+
+                        {/* Text + buttons */}
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-[#3B2F2F] mb-0.5">
+                                You liked a look for a similar occasion
+                            </p>
+                            <p className="text-xs text-[#7A5E5E] mb-3">
+                                View it again, or generate fresh recommendations?
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleSubmitNew}
+                                    className="border border-[#D8C3A5] bg-[#F7F0E8] hover:bg-[#EDE3D6] text-[#3B2F2F] text-xs px-3.5 py-1.5 rounded-lg transition-colors"
+                                >
+                                    Generate new
+                                </button>
+                                <button
+                                    onClick={handleViewCached}
+                                    className="bg-[#B8875B] hover:bg-[#8A5A3B] text-[#FFFAF3] text-xs px-3.5 py-1.5 rounded-lg transition-colors"
+                                >
+                                    View liked look
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}

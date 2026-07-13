@@ -36,18 +36,19 @@ graph_builder.add_node("reason_outfit", reason_outfit.run)
 graph_builder.add_node("critique_recommendations", critique_recommendations.run)
 
 # add edges
+# (analyze_occasion → retrieve_liked_outfits is the conditional edge below —
+# a fixed edge here as well would bypass the clarification gate)
 graph_builder.add_edge(START, "analyze_occasion")
-graph_builder.add_edge("analyze_occasion", "retrieve_liked_outfits")
 graph_builder.add_edge("retrieve_liked_outfits", "reason_outfit")
 graph_builder.add_edge("reason_outfit", "critique_recommendations")
 
 # conditional edge 1: clarification gate
 graph_builder.add_conditional_edges(
     "analyze_occasion",
-    route_after_evaluate,
+    route_after_analyze,
     {
         "retrieve_liked_outfits": "retrieve_liked_outfits",
-        "END": "END",
+        "END": END,
     }
 )
 
@@ -57,7 +58,7 @@ graph_builder.add_conditional_edges(
     route_after_critique,
     {
         "reason_outfit": "reason_outfit",
-        "END": "END",
+        "END": END,
     }
 )
 

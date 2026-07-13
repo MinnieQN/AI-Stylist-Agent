@@ -4,6 +4,7 @@ import ImageUpload from '../components/ImageUpload';
 
 /**
  * Upload page for user to upload a full-body image to the backend for try-on image generation.
+ * Relays selectedGarments (from GarmentPickerPage) through to TryOnPage.
  */
 
 export default function UploadPage() {
@@ -18,7 +19,7 @@ export default function UploadPage() {
         return null;
     }
 
-    const { occasion, selectedStyle, recommendations } = location.state || {};
+    const { occasion, selectedStyle, recommendations, selectedGarments } = location.state || {};
 
     // handle successful upload
     function handleUploadSuccess(filename, filepath) {
@@ -29,7 +30,7 @@ export default function UploadPage() {
     // handle generate try-on images button click
     function handleGenerateTryon() {
         navigate('/tryon', {
-            state: { selectedStyle, occasion, filename, filepath, recommendations }
+            state: { selectedStyle, occasion, filename, filepath, recommendations, selectedGarments }
         });
     }
 
@@ -85,6 +86,29 @@ export default function UploadPage() {
                     </p>
                 </div>
 
+                {/* Selected garments preview — shows what will be photo-fitted */}
+                {selectedGarments && Object.keys(selectedGarments).length > 0 && (
+                    <div className="bg-[#FFFAF3] border border-[#D8C3A5] rounded-2xl p-6 mb-6">
+                        <h2 className="text-base font-medium text-[#3B2F2F] mb-3">
+                            Your selected garments
+                        </h2>
+                        <div className="flex gap-3">
+                            {Object.entries(selectedGarments).map(([category, product]) =>
+                                product ? (
+                                    <div key={category} className="flex-1">
+                                        <img
+                                            src={product.image_url}
+                                            alt={product.title}
+                                            className="w-full h-24 rounded-xl object-cover bg-[#F0E6D8] mb-1"
+                                        />
+                                        <p className="text-xs text-[#7A5E5E] capitalize">{category}</p>
+                                    </div>
+                                ) : null
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* Upload section */}
                 <div className="bg-[#FFFAF3] border border-[#D8C3A5] rounded-2xl p-6">
                     <h2 className="text-base font-medium text-[#3B2F2F] mb-1">
@@ -110,4 +134,3 @@ export default function UploadPage() {
         </div>
     );
 }
-

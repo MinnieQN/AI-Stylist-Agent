@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -12,6 +12,11 @@ export default function TryOnPage() {
 
     // set state to track liked
     const [liked, setLiked] = useState(false);
+
+    // guard: React StrictMode mounts twice in dev, which fired generation
+    // TWICE — two concurrent GPU jobs (2x ZeroGPU quota) that also crashed
+    // the shared pix2pix pipeline. Ensure exactly one generation per visit.
+    const generationStarted = useRef(false);
 
     // get user selected  style, occasion and uploaded image from UploadPage
     const location = useLocation();
@@ -36,7 +41,8 @@ export default function TryOnPage() {
                     {
                         style: location.state.selectedStyle,
                         occasion: location.state.occasion,
-                        filepath: location.state.filepath
+                        filepath: location.state.filepath,
+                        garments: location.state.selectedGarments || null,
                     },
                 );
                 // set the received json image string to state to display on the page
@@ -48,6 +54,8 @@ export default function TryOnPage() {
                 setLoading(false);
             }
         }
+        if (generationStarted.current) return;
+        generationStarted.current = true;
         generateTryOn();
     }, []); // empty array - run once when page loads
 
@@ -112,7 +120,13 @@ export default function TryOnPage() {
                 {loading && (
                     <div className="bg-[#FFFAF3] border border-[#D8C3A5] rounded-2xl p-12 flex flex-col items-center gap-3">
                         <div className="w-8 h-8 border-2 border-[#B8875B] border-t-transparent rounded-full animate-spin" />
-                        <p className="text-sm text-[#7A5E5E]">Generating your try-on image...</p>
+                        <p className="text-sm text-[#7A5E5E]">
+                            {location.state?.selectedGarments?.top && location.state?.selectedGarments?.bottom
+                                ? 'Fitting your top, then your bottom — this can take a few minutes...'
+                                : location.state?.selectedGarments?.top || location.state?.selectedGarments?.bottom
+                                    ? 'Fitting your selected garment — this can take a minute or two...'
+                                    : 'Generating your try-on image...'}
+                        </p>
                     </div>
                 )}
 
@@ -159,19 +173,31 @@ export default function TryOnPage() {
                             </div>
                         ) : (
                             // normal generated view: like / dislike
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleDislike}
-                                    className="flex-1 border border-[#D8C3A5] bg-[#F7F0E8] hover:bg-[#EDE3D6] text-[#3B2F2F] py-3 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    Dislike
-                                </button>
-                                <button
-                                    onClick={handleLike}
-                                    className="flex-1 bg-[#B8875B] hover:bg-[#8A5A3B] text-[#FFFAF3] py-3 rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    {liked ? 'Liked ✓' : 'Like'}
-                                </button>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={handleDislike}
+                                        className="flex-1 border border-[#D8C3A5] bg-[#F7F0E8] hover:bg-[#EDE3D6] text-[#3B2F2F] py-3 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        Dislike
+                                    </button>
+                                    <button
+                                        onClick={handleLike}
+                                        disabled={liked}
+                                        className="flex-1 bg-[#B8875B] hover:bg-[#8A5A3B] disabled:hover:bg-[#B8875B] text-[#FFFAF3] py-3 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        {liked ? 'Liked ✓' : 'Like'}
+                                    </button>
+                                </div>
+                                {/* after saving the look, offer a way back to the start */}
+                                {liked && (
+                                    <button
+                                        onClick={() => navigate('/')}
+                                        className="w-full text-[#B8875B] hover:text-[#8A5A3B] py-2 text-sm transition-colors"
+                                    >
+                                        ← Back to home
+                                    </button>
+                                )}
                             </div>
                         )}
 

@@ -25,7 +25,7 @@ export default function StylePickerPage() {
 
         // brief delay for fading effect before navigating
         setTimeout(() => {
-            navigate('/upload', {
+            navigate('/garments', {
                 state: { selectedStyle: style, occasion, recommendations },
             });
         }, 400);

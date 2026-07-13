@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import OccasionPage from './pages/OccasionPage';
 import StylePickerPage from './pages/StylePickerPage';
+import GarmentPickerPage from './pages/GarmentPickerPage';
 import UploadPage from './pages/UploadPage';
 import TryOnPage from './pages/TryOnPage';
 
@@ -17,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<OccasionPage />} />
           <Route path="/styles" element={<StylePickerPage />} />
+          <Route path="/garments" element={<GarmentPickerPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/tryon" element={<TryOnPage />} />
         </Routes>

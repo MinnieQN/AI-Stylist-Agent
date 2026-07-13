@@ -6,163 +6,135 @@ This file lives in the project root. Paste its contents at the start of any new 
 
 ## What this project is
 
-A full-stack web app: a personal AI wardrobe consultant. User inputs an occasion → a LangGraph agent generates 3 personalized outfit recommendations → user picks one → garments are sourced from the user's virtual closet OR fetched from Google Shopping → user uploads a body photo → an image-conditioned try-on model generates the try-on → user likes (stored) or dislikes (re-pick).
+A full-stack web app: a personal AI wardrobe consultant. User inputs an occasion → a LangGraph agent generates 3 personalized outfit recommendations → user picks a style → shoppable garments are fetched from Google Shopping (virtual closet as a second source, later) → user picks garments → uploads a body photo → try-on: IDM-VTON (image-conditioned) when a top garment image exists, instruct-pix2pix (text-driven) as fallback → user likes (stored) or dislikes (re-pick).
 
-**Current status:** Phases A/B complete and reworked. Semantic cache built (route-level). Liked-outfit two-store ingestion built. instruct-pix2pix try-on working. **Next: rebuild the agent to the 5-node design, then garment sourcing (shopping fetch + closet), then IDM-VTON try-on.**
+**Current status:** Agent rebuilt (4 nodes, 2 conditional edges). Semantic cache + clarification gate + style-preference selector live. Shopping fetch + GarmentPickerPage built. IDM-VTON standalone proof PASSED. **Next: wire IDM-VTON into /tryon (services/tryon_vton.py + routing), then chained top+bottom VTON, then the virtual closet.**
 
 ---
 
 ## Architecture principles (READ FIRST — these encode deliberate decisions)
 
-1. **No web search in the recommendation agent.** `search_styles`, `evaluate_results`, and the search retry loop were REMOVED deliberately. The LLM already knows styling; the web's unique value is *current products*, used later for garment sourcing. Do not reintroduce search into the recommendation path.
-2. **RAG = private user data only.** No generic style-knowledge corpus (the model knows generic styling). Two RAG uses: (a) `liked_outfits` store, (b) virtual closet garments.
-3. **`liked_outfits` is ONE store with TWO read thresholds:** ≥0.95 = semantic cache (reuse stored try-on); ~0.75 = preference grounding inside the agent (`retrieve_liked_outfits`). No separate "user history" store. Dislikes are NOT stored (dropped deliberately — dislike just routes the user back to re-pick).
-4. **The closet sources garments AFTER outfit selection.** `retrieve_closet` is NOT an agent node — it's a post-selection retrieval: per-key-piece semantic search (by category) against the user's closet, offered alongside "search online."
-5. **Try-on honesty:** instruct-pix2pix is instruction-driven — it CANNOT take a garment image as input; it imagines from text. Image-conditioned try-on (person + specific garment image) requires IDM-VTON (or CatVTON/OOTDiffusion) via a duplicated HuggingFace ZeroGPU Space called with `gradio_client` — the standard HF Inference API does NOT serve these models. pix2pix stays as fallback. Never claim image-conditioned fidelity for the pix2pix path.
-6. **Agentic value lives at the boundaries:** the agent validates its input (clarification gate) and critiques its own output (generator-critic loop, max 1 retry). These two conditional edges ARE the agentic story.
+1. **No web search in the recommendation agent.** search_styles / evaluate_results / search retry loop were REMOVED deliberately. The LLM knows styling; the web's value is sourcing real garments AFTER style selection. Do not reintroduce.
+2. **RAG = private user data only.** No generic style-knowledge corpus. Two stores: liked_outfits (built), closet_items (later).
+3. **liked_outfits: ONE store, TWO thresholds.** ≥0.95 (CACHE_THRESHOLD) = semantic cache, route-level, returns stored try-on as an inline suggestion the user confirms. ~0.75 (GROUNDING_THRESHOLD) = preference grounding via retrieve_liked_outfits node. Dislikes NOT stored — dislike navigates back to StylePickerPage with the same recommendations.
+4. **Agentic value at the boundaries:** input clarification gate + output generator-critic loop (max 1 regeneration). Critique double-fail = silent degrade (DELIBERATE: ship the 2nd attempt, no UI hint — soft quality issues beat erroring after two good generations).
+5. **Two-store pattern:** shared uuid4 string is Mongo _id AND Qdrant point id (Mongo ObjectId is invalid as a Qdrant id). Qdrant payload minimal: {user_id} only; fetch Mongo via hit.id.
+6. **Cache vector is occasion-dominant** (embed occasion + style_name at write; embed occasion-only at cache query). The cache is a user-confirmed SUGGESTION, so imperfect matching is fine.
+7. **key_pieces_categorized is the source of truth** for garment categories: reason_outfit emits `{"top": [...], "bottom": [...], "shoes": [...]}` (exactly these keys; outerwear/accessories under top). Flat `key_pieces` is DERIVED in code after parsing to preserve the existing contract (StyleCard, gemini.py, critique). categorize_key_pieces() keyword rules remain ONLY as endpoint fallback.
+8. **Try-on honesty + routing:** pix2pix is instruction-driven (cannot take garment images). IDM-VTON = image-conditioned, via duplicated HF ZeroGPU Space + gradio_client (standard HF Inference API does NOT serve it). Routing: garments.top.image_url present → IDM-VTON; absent OR IDM-VTON raises → pix2pix. IDM-VTON supports upper_body/lower_body/dresses — SHOES ARE NOT A CATEGORY (display-only). Full-body = sequential chained calls (top, then bottom on the result); if chain step 2 fails, return step 1's result.
+9. **Shopping is an enhancement layer:** empty categories are VALID (never raise), per-category try/except, all-empty still returns the structure, picker gates Continue on non-empty categories only, error path still offers "continue without products."
 
 ---
 
-## The agent (target design — 5 nodes, 2 conditional edges)
+## The agent (current — 4 nodes, 2 conditional edges, 1 loop)
 
 ```
-START → analyze_occasion
-   ├─ (conditional: clear, dressable occasion?)
-   │     no → END, respond with needs_clarification + question
-   │     yes ↓
-   retrieve_liked_outfits        (Qdrant liked_outfits @ ~0.75, top-k, [] if none)
-        ↓
-   reason_outfit                 (Gemini; history as SOFT signal: occasion-appropriate
-        ↓                         first, preference tiebreaker, keep variety)
-   critique_recommendations      (Flash judge: 3 styles distinct? respect formality/
-   │                              needed_items? respect-but-not-clone history?)
-   ├─ (conditional: pass OR already retried once?)
-   │     fail & retry<1 → reason_outfit (critique text passed as feedback)
-   │     else → END
+START → analyze_occasion (Flash; ONE call does clarity judgment + analysis;
+   │     nested JSON {occasion_clear, clarification_question, analysis})
+   ├─ route_after_analyze: occasion_clear? no → END
+   ↓
+retrieve_liked_outfits (embed style_direction → Qdrant liked_outfits,
+   │     user_id filter, limit=3, keep ≥ GROUNDING_THRESHOLD, fetch Mongo
+   │     per hit.id, return [{occasion, style}] — trimmed, no tryon_image)
+   ↓
+reason_outfit (Flash; history soft-signal block: occasion-appropriateness
+   │     first, preference tiebreaker, keep variety; conditional
+   │     critique_feedback block on retry; emits key_pieces_categorized,
+   │     derives flat key_pieces in code)
+   ↓
+critique_recommendations (Flash judge: distinctness, constraint fit vs
+   │     formality/needed_items, history-balance — passes if no history;
+   │     returns critique_passed, critique_feedback, critique_retry_count+1;
+   │     COUNTS CRITIQUE RUNS: 1 after first, 2 after retry's critique)
+   ├─ route_after_critique: passed OR critique_retry_count ≥ 2 → END
+   └─ else → reason_outfit (feedback injected)
 ```
 
-AgentState (TypedDict, total=False): occasion, style_preference, analysis{formality, style_direction, needed_items}, occasion_clear (bool), clarification_question (str|None), retrieved_history (list[dict]), recommendations, critique_passed (bool), critique_feedback (str|None), critique_retry_count (int), user_id.
+AgentState (total=False): occasion, style_preference, user_id, analysis{formality, style_direction, needed_items}, occasion_clear, clarification_question, retrieved_history, recommendations, critique_passed, critique_feedback, critique_retry_count.
 
-Node convention: each node module exposes `run(state) -> dict`, returning ONLY changed keys.
+Invoke with INPUTS ONLY: `{occasion, style_preference, user_id}` — no counter seeding (nodes use .get defaults).
 
-REMOVED from the old graph: search_styles, evaluate_results, refinement_query, retry_count (search retries). Do not resurrect.
+Watch: Flash critique may over-fail; if >half of first attempts fail, soften "strictly" → "fairly" in the judge prompt.
 
 ---
 
-## Full system flow
-
-```
-User inputs occasion
-  → semantic cache check (route-level, NOT in graph; skip if skip_cache=true)
-      hit (≥0.95): return {cached:true, outfit} → OccasionPage shows inline
-        suggestion (Option A card) → View liked look | Generate new (skip_cache)
-      miss: run agent → one of:
-        {needs_clarification:true, question} → OccasionPage asks user to refine
-        {cached:false, recommendations} → StylePickerPage
-  → user picks a style
-  → GarmentPickerPage: retrieve_closet (per-category semantic search)
-      closet matches → show them, offer "use closet" or "search online"
-      no matches / user chooses online → Google Shopping fetch (SerpAPI,
-        3 queries: top/bottom/shoes, first/best match per category, NO price field)
-  → user confirms garments → UploadPage (body photo)
-  → try-on: IDM-VTON (person + garment image) when available; pix2pix fallback
-  → TryOnPage: Like → two-store write (MongoDB + Qdrant liked_outfits)
-              Dislike → navigate back to StylePickerPage with same recommendations
-  (cached view: no Like/Dislike; "Generate new recommendations" + "Back to home")
-```
-
----
-
-## Tech stack
-
-| Layer | Tool | Status |
-|---|---|---|
-| Frontend | React 18, Vite, Router v6, Axios, Tailwind v4 | built |
-| Backend | Python 3.11, FastAPI | built |
-| Agent | LangGraph (5-node target), google-genai (Gemini Flash) | rebuild |
-| Vector DB | Qdrant (Docker), gemini-embedding-001, 3072-dim cosine | built |
-| Document DB | MongoDB (Docker), PyMongo | built |
-| Cache | services/cache.py check_cache(occasion, user_id) route-level | built |
-| Shopping | SerpAPI Google Shopping (free 100/mo; fetch AFTER style pick = 3 queries/flow) | next |
-| Try-on v1 | timbrooks/instruct-pix2pix (instruction-driven) | working |
-| Try-on v2 | IDM-VTON via duplicated ZeroGPU Space + gradio_client | planned |
-| Closet | SegFormer garment isolation + Gemini Vision tagging + dual-store | planned |
-| Image storage | MongoDB base64 now; AWS S3 later (only image field changes) | — |
-
----
-
-## Project structure (deltas from built state)
-
-```
-backend/
-├── api/routes.py            /styles (cache + agent, 3 response shapes),
-│                            /upload, /tryon, /tryon/like,
-│                            + /styles/garments (shopping fetch — next)
-│                            + /closet/... (later)
-├── services/
-│   ├── cache.py             built
-│   ├── shopping.py          NEXT: search_garment(query, limit) — no price field
-│   ├── embed.py, qdrant.py, mongo.py, gemini.py   built
-│   └── tryon.py             pix2pix now; idm_vton via gradio_client later
-├── agent/
-│   ├── state.py             UPDATE to new AgentState fields
-│   ├── graph.py             REBUILD: 5 nodes, 2 conditional edges
-│   └── nodes/
-│       ├── analyze_occasion.py        UPDATE (adds occasion_clear judgment)
-│       ├── retrieve_liked_outfits.py  NEW (~0.75, top-k=3, [] if empty)
-│       ├── reason_outfit.py           UPDATE (history soft-signal block +
-│       │                               optional critique_feedback block)
-│       └── critique_recommendations.py NEW (Flash judge, max 1 retry)
-frontend/
-├── pages/GarmentPickerPage.jsx   NEW (closet/online garment selection)
-└── (OccasionPage handles 3rd response shape: needs_clarification)
-```
-
----
-
-## /api/styles — three response shapes (frontend branches on these)
+## /api/styles — three response shapes
 
 ```json
-{ "cached": true,  "occasion": "...", "outfit": { "style": {...}, "tryon_image": "..." } }
+{ "occasion": "...", "cached": true,  "outfit": { "style": {...}, "tryon_image": "..." } }
 { "cached": false, "needs_clarification": true, "question": "..." }
-{ "cached": false, "recommendations": [ {style_name, description, key_pieces, reasoning} x3 ] }
+{ "occasion": "...", "cached": false, "recommendations": [ {style_name, description, key_pieces, key_pieces_categorized, reasoning} x3 ] }
 ```
-Request: `{ occasion, style_preference?, skip_cache? (default false) }`
+Request: `{ occasion, style_preference?, skip_cache? }`. Branch order in frontend: needs_clarification FIRST, then cached, then recommendations.
 
 ---
 
-## Environment variables
+## Other endpoints
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| POST | /api/upload | multipart file | uuid-named file to uploads/, returns {filename, filepath} |
+| POST | /api/tryon | { style, occasion, filepath, garments? } | NEXT: route on garments.top → IDM-VTON else pix2pix; deletes temp file in finally; returns {image} base64 |
+| POST | /api/tryon/like | { occasion, style, tryon_image } | two-store write: Mongo insert → embed(occasion + style_name + description) → Qdrant upsert (shared uuid) |
+| POST | /api/styles/garments | { occasion, style } | prefers key_pieces_categorized, keyword fallback; query = f"{pieces[0]} {occasion}"; 3 SerpAPI calls/flow; per-category try/except → [] |
+
+SerpAPI free tier = 100 searches/month ≈ 33 flows. Product fields: title, image_url (thumbnail), product_link — NO price (deliberate).
+
+---
+
+## Frontend flow & pages
 
 ```
-GEMINI_API_KEY=...
-EMBEDDING_MODEL=gemini-embedding-001
-QDRANT_URL=http://localhost:6333
-MONGODB_URI=mongodb://localhost:27017/
-CACHE_THRESHOLD=0.95
-GROUNDING_THRESHOLD=0.75
-DEFAULT_USER_ID=local-user
-SERPAPI_KEY=...            # next
-HF_TOKEN=...               # for IDM-VTON Space, later
+OccasionPage (input + style-preference pills [womenswear/menswear/no preference],
+   localStorage-persisted; handles 3 response shapes: clarification banner
+   #F0E6D8/#B8875B left-border, cache Option A card w/ 64px thumbnail +
+   Generate new/View liked look, or navigate)
+→ StylePickerPage (3 cards, fade-on-select, navigates to /garments with
+   {selectedStyle, occasion, recommendations})
+→ GarmentPickerPage (fetch on mount, Object.entries render — handles any
+   categories, select 1/category by title identity, click-again deselects,
+   empty category = quiet note, Continue gated on non-empty categories,
+   error path offers continue-without-products)
+→ UploadPage (relays selectedGarments; shows garment thumbnails preview;
+   guard checks selectedStyle only — garments optional)
+→ TryOnPage (fromCache branch: setImage + skip generation, buttons =
+   Generate new recommendations + Back to home; normal branch: Dislike →
+   /styles with {occasion, recommendations}, Like → liked ✓ state + POST
+   /tryon/like; NEXT: send garments in /tryon POST, honest loading copy
+   "can take a minute or two" for VTON)
 ```
+
+State relay chain: recommendations + selectedGarments thread through every navigate.
+
+---
+
+## Tech stack & environment
+
+Python 3.11, FastAPI :8001, React 18/Vite :5173, Tailwind v4 (no config), Qdrant Docker :6333 (3072-dim cosine, gemini-embedding-001), MongoDB Docker :27017 (PyMongo, db ai_stylist), google-genai SDK (`from google import genai`), LangGraph, SerpAPI (google-search-results pkg), gradio_client + duplicated IDM-VTON ZeroGPU Space, timbrooks/instruct-pix2pix (working try-on v1; gemini.py model string "gemini-3.1-flash-image" — user-confirmed working).
+
+.env (project root): GEMINI_API_KEY, EMBEDDING_MODEL=gemini-embedding-001, QDRANT_URL, MONGODB_URI, CACHE_THRESHOLD=0.95, GROUNDING_THRESHOLD=0.75, DEFAULT_USER_ID=local-user, SERPAPI_KEY, HF_TOKEN.
+
+docker-compose.yml (root): qdrant (qdrant_data volume) + mongodb (mongo:7, mongo_data volume). Stray-container lesson: if a port won't bind, check `docker ps -a` for an old container holding it.
+
+Services: cache.py (check_cache → record|None), embed.py (embed_text, embed_texts), qdrant.py (ensure_collections on startup), mongo.py (verify_connection on startup), shopping.py (search_garment — [] is valid, categorize_key_pieces fallback), gemini.py (generate_tryon_image only), tryon_vton.py (NEXT: idm_vton_tryon(person_filepath, garment_image_url) → base64; module-level Client; download garment image if Space rejects URLs; raise on failure for route fallback).
+
+---
+
+## Build queue (in order)
+
+1. **IDM-VTON wiring** （Done） — services/tryon_vton.py; TryOnRequest.garments: dict|None; route: top.image_url → VTON, except/else → pix2pix; TryOnPage sends garments + loading copy. Test 3 paths: VTON success, no-top → pix2pix, Space paused → graceful fallback.
+2. **Chained full-body VTON**（Done）— extend standalone script first (feed step-1 output + bottom image); expect compounding artifacts ~20-30%, 2-4 min total; if chain step 2 fails return step 1 result; progressive UI ("top fitted — now fitting bottom…") optional.
+3. **Virtual closet** — per-garment upload → SegFormer (mattmdjaga/segformer_b2_clothes) isolate → Gemini Vision tag (type/color/formality/season) → embed rich description → Mongo + Qdrant closet_items. retrieve_closet = post-selection per-category semantic search (NOT an agent node), feeds GarmentPickerPage alongside shopping. CAUTION: SegFormer is trained on worn clothing — may fail on flat product-style photos; may need background removal instead, or nothing.
+4. Later: S3 (only tryon_image field changes), auth (Phase E), multi-garment compositing beyond top+bottom.
 
 ---
 
 ## Design system
 
-Page `#F7F0E8`, sections `#D8C3A5`, cards `#FFFAF3`, primary `#3B2F2F`, secondary `#7A5E5E`, tag bg `#F0E6D8`, tag text `#5A3E2B`, button `#B8875B`, hover `#8A5A3B`, button text `#FFFAF3`. Flat, no shadows, rounded-2xl. Tailwind v4, no config file.
-
----
-
-## Build order (current queue)
-
-1. **Agent rebuild** — state.py fields; analyze_occasion clarity judgment; retrieve_liked_outfits; reason_outfit soft-signal + feedback blocks; critique_recommendations; graph.py 5-node wiring; route handles needs_clarification; OccasionPage handles the new shape.
-2. **Shopping fetch** — services/shopping.py (SerpAPI, no price), POST /styles/garments (3 category queries, graceful [] on failure), GarmentPickerPage, thread selectedGarments through Upload→TryOn.
-3. **IDM-VTON standalone proof** — duplicate Space, gradio_client script with 2 hardcoded images; only then wire into /tryon (top-garment-only is acceptable demo scope).
-4. **Virtual closet** — ingestion (SegFormer isolate + Vision tag + dual-store) and retrieve_closet per-category search feeding GarmentPickerPage.
-5. Later: S3, auth (Phase E), multi-garment try-on compositing.
+Page #F7F0E8, sections #D8C3A5, cards #FFFAF3, primary text #3B2F2F, secondary #7A5E5E, tag bg #F0E6D8, tag text #5A3E2B, button #B8875B, hover #8A5A3B, button text #FFFAF3. Flat, no shadows, rounded-2xl.
 
 ---
 
 ## Interview story (keep consistent)
 
-"A LangGraph agent that validates its input (clarification gate) and critiques its own output (generator-critic with one retry). Recommendations are personalized by RAG over the user's liked-outfit history — one vector store read at two thresholds: strict for a semantic cache that skips regeneration entirely, loose for preference grounding. Garments are sourced from the user's closet via semantic search or fetched live from Google Shopping, and tried on with an image-conditioned model. I deliberately removed web search from recommendation generation — the LLM already knows styling; the web earns its place sourcing real, current garments."
+"A LangGraph agent that validates its input (clarification gate) and critiques its own output (generator-critic, one retry). Recommendations are personalized by RAG over the user's liked-outfit history — one vector store read at two thresholds: strict for a semantic cache that skips regeneration entirely (served as a user-confirmed suggestion), loose for preference grounding. After the user picks a style, garments are sourced live from Google Shopping (closet as second source coming), and tried on with IDM-VTON — image-conditioned, so the actual product transfers — falling back to instruction-driven pix2pix when no garment image exists. I deliberately removed web search from recommendation generation: the LLM already knows styling; the web earns its place sourcing real, current garments."
