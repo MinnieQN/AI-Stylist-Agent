@@ -7,12 +7,24 @@ import numpy as np
 Segmentation service for processing user uploaded image.
 Take an image path, run the model, return the segmentation mask.
 """
-# Load model and image processor
 model_name = "mattmdjaga/segformer_b2_clothes"
-processor = SegformerImageProcessor.from_pretrained(model_name)
-model = SegformerForSemanticSegmentation.from_pretrained(model_name)
+
+# lazy singletons: loading at import would download/load ~200MB on every
+# backend boot even when segmentation is never used (same lesson as the
+# gradio client — import-time work belongs at first use)
+_processor = None
+_model = None
+
+def _get_model():
+    global _processor, _model
+    if _model is None:
+        print("Loading SegFormer clothes model (first call only)...")
+        _processor = SegformerImageProcessor.from_pretrained(model_name)
+        _model = SegformerForSemanticSegmentation.from_pretrained(model_name)
+    return _processor, _model
 
 def segment_image(image_path: str) -> dict:
+    processor, model = _get_model()
     # load user's full-body image
     image = Image.open(image_path).convert("RGB")
     # prepare image for the model - convert to tensor

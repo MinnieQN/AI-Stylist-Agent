@@ -1,0 +1,182 @@
+[
+  {
+    "case_name": "good_distinct_set",
+    "expected_pass": true,
+    "note": "three genuinely distinct styles, all needed categories covered, formality consistent — the judge's baseline pass case",
+    "analysis": {
+      "formality": "business casual",
+      "style_direction": "A relaxed yet polished aesthetic with clean lines and neutral tones.",
+      "needed_items": ["top", "bottom", "shoes"]
+    },
+    "retrieved_history": [],
+    "recommendations": [
+      {
+        "style_name": "Classic Professional",
+        "description": "A timeless, structured look built on tailoring fundamentals with crisp lines and traditional colors.",
+        "key_pieces_categorized": {"top": ["navy blazer", "white dress shirt"], "bottom": ["grey trousers"], "shoes": ["oxford shoes"]},
+        "key_pieces": ["navy blazer", "white dress shirt", "grey trousers", "oxford shoes"],
+        "reasoning": "Conveys reliability and polish for a professional setting."
+      },
+      {
+        "style_name": "Modern Minimalist",
+        "description": "Clean-lined and contemporary with a muted palette, unstructured layers, and sleek silhouettes.",
+        "key_pieces_categorized": {"top": ["black knit polo", "unstructured charcoal blazer"], "bottom": ["tapered black trousers"], "shoes": ["minimal leather sneakers"]},
+        "key_pieces": ["black knit polo", "unstructured charcoal blazer", "tapered black trousers", "minimal leather sneakers"],
+        "reasoning": "Reads current and intentional without feeling stiff."
+      },
+      {
+        "style_name": "Relaxed Smart Casual",
+        "description": "Soft textures and easy layers — approachable warmth with enough structure to stay office-appropriate.",
+        "key_pieces_categorized": {"top": ["camel crewneck sweater", "light blue oxford shirt"], "bottom": ["dark chinos"], "shoes": ["suede loafers"]},
+        "key_pieces": ["camel crewneck sweater", "light blue oxford shirt", "dark chinos", "suede loafers"],
+        "reasoning": "Balances comfort and professionalism for a softer first impression."
+      }
+    ]
+  },
+  {
+    "case_name": "near_duplicate_styles",
+    "expected_pass": false,
+    "note": "styles 1 and 2 are near-identical (same blazer/shirt/trousers formula, renamed) — must fail on distinctness",
+    "analysis": {
+      "formality": "business casual",
+      "style_direction": "A relaxed yet polished aesthetic with clean lines and neutral tones.",
+      "needed_items": ["top", "bottom", "shoes"]
+    },
+    "retrieved_history": [],
+    "recommendations": [
+      {
+        "style_name": "Classic Professional",
+        "description": "A timeless, structured look with a navy blazer, crisp shirt, and grey trousers.",
+        "key_pieces_categorized": {"top": ["navy blazer", "white dress shirt"], "bottom": ["grey trousers"], "shoes": ["oxford shoes"]},
+        "key_pieces": ["navy blazer", "white dress shirt", "grey trousers", "oxford shoes"],
+        "reasoning": "Conveys reliability and polish."
+      },
+      {
+        "style_name": "Timeless Business",
+        "description": "A classic, structured look with a navy blazer, crisp white shirt, and grey trousers.",
+        "key_pieces_categorized": {"top": ["navy blazer", "white shirt"], "bottom": ["grey trousers"], "shoes": ["black oxford shoes"]},
+        "key_pieces": ["navy blazer", "white shirt", "grey trousers", "black oxford shoes"],
+        "reasoning": "A dependable professional appearance."
+      },
+      {
+        "style_name": "Relaxed Smart Casual",
+        "description": "Soft textures and easy layers with enough structure to stay office-appropriate.",
+        "key_pieces_categorized": {"top": ["camel crewneck sweater"], "bottom": ["dark chinos"], "shoes": ["suede loafers"]},
+        "key_pieces": ["camel crewneck sweater", "dark chinos", "suede loafers"],
+        "reasoning": "Balances comfort and professionalism."
+      }
+    ]
+  },
+  {
+    "case_name": "missing_needed_category",
+    "expected_pass": false,
+    "note": "needed_items includes shoes but style 2 has an empty shoes list — must fail on category coverage",
+    "analysis": {
+      "formality": "smart casual",
+      "style_direction": "Polished but easygoing evening look with warm tones.",
+      "needed_items": ["top", "bottom", "shoes"]
+    },
+    "retrieved_history": [],
+    "recommendations": [
+      {
+        "style_name": "Warm Evening Classic",
+        "description": "Rich textures in warm neutrals — a put-together dinner look.",
+        "key_pieces_categorized": {"top": ["rust knit polo"], "bottom": ["dark brown chinos"], "shoes": ["leather loafers"]},
+        "key_pieces": ["rust knit polo", "dark brown chinos", "leather loafers"],
+        "reasoning": "Warm and intentional for an evening out."
+      },
+      {
+        "style_name": "Relaxed Layered",
+        "description": "Soft layering with an open overshirt and easy trousers.",
+        "key_pieces_categorized": {"top": ["cream tee", "olive overshirt"], "bottom": ["relaxed taupe trousers"], "shoes": []},
+        "key_pieces": ["cream tee", "olive overshirt", "relaxed taupe trousers"],
+        "reasoning": "Comfortable but considered."
+      },
+      {
+        "style_name": "Sleek Monochrome",
+        "description": "A tonal dark look with clean lines for understated confidence.",
+        "key_pieces_categorized": {"top": ["black merino sweater"], "bottom": ["black slim trousers"], "shoes": ["black chelsea boots"]},
+        "key_pieces": ["black merino sweater", "black slim trousers", "black chelsea boots"],
+        "reasoning": "Minimal and sharp without trying too hard."
+      }
+    ]
+  },
+  {
+    "case_name": "wrong_formality",
+    "expected_pass": false,
+    "note": "analysis says formal black-tie but style 3 is athleisure — must fail on formality fit",
+    "analysis": {
+      "formality": "formal",
+      "style_direction": "Elegant black-tie evening wear with refined tailoring and luxurious fabrics.",
+      "needed_items": ["top", "bottom", "shoes"]
+    },
+    "retrieved_history": [],
+    "recommendations": [
+      {
+        "style_name": "Classic Black Tie",
+        "description": "A traditional tuxedo look with satin lapels and patent finish.",
+        "key_pieces_categorized": {"top": ["black tuxedo jacket", "white dress shirt", "black bow tie"], "bottom": ["tuxedo trousers"], "shoes": ["patent oxford shoes"]},
+        "key_pieces": ["black tuxedo jacket", "white dress shirt", "black bow tie", "tuxedo trousers", "patent oxford shoes"],
+        "reasoning": "The definitive formal evening standard."
+      },
+      {
+        "style_name": "Modern Formal",
+        "description": "A midnight-blue dinner jacket take on black tie with slimmer lines.",
+        "key_pieces_categorized": {"top": ["midnight blue dinner jacket", "white shirt"], "bottom": ["black formal trousers"], "shoes": ["black velvet loafers"]},
+        "key_pieces": ["midnight blue dinner jacket", "white shirt", "black formal trousers", "black velvet loafers"],
+        "reasoning": "Formal with a contemporary edge."
+      },
+      {
+        "style_name": "Sporty Comfort",
+        "description": "A relaxed athleisure set with a zip hoodie and joggers for all-day ease.",
+        "key_pieces_categorized": {"top": ["grey zip hoodie"], "bottom": ["black joggers"], "shoes": ["running sneakers"]},
+        "key_pieces": ["grey zip hoodie", "black joggers", "running sneakers"],
+        "reasoning": "Maximum comfort for a casual day."
+      }
+    ]
+  },
+  {
+    "case_name": "good_set_with_history_variety",
+    "expected_pass": true,
+    "note": "history present; styles 1-2 lean toward the liked minimalist aesthetic while style 3 deliberately offers classic variety — must pass history-balance (respects but does not clone)",
+    "analysis": {
+      "formality": "business casual",
+      "style_direction": "Clean modern professional aesthetic, structured pieces, neutral tones.",
+      "needed_items": ["top", "bottom", "shoes"]
+    },
+    "retrieved_history": [
+      {
+        "occasion": "job interview at a tech startup",
+        "style": {
+          "style_name": "Modern Minimalist",
+          "description": "Clean-lined and contemporary with a muted palette and sleek silhouettes.",
+          "key_pieces": ["black knit polo", "tapered black trousers", "minimal leather sneakers"],
+          "reasoning": "Reads current and intentional."
+        }
+      }
+    ],
+    "recommendations": [
+      {
+        "style_name": "Refined Minimalist",
+        "description": "Muted tones and clean silhouettes with slightly elevated fabrics — an evolution of a pared-back look.",
+        "key_pieces_categorized": {"top": ["charcoal merino polo"], "bottom": ["tapered grey trousers"], "shoes": ["sleek leather derbies"]},
+        "key_pieces": ["charcoal merino polo", "tapered grey trousers", "sleek leather derbies"],
+        "reasoning": "Builds on a minimal aesthetic with a professional finish."
+      },
+      {
+        "style_name": "Soft Structure",
+        "description": "Unstructured tailoring in warm neutrals — relaxed shapes that keep a considered, modern feel.",
+        "key_pieces_categorized": {"top": ["taupe unstructured blazer", "white tee"], "bottom": ["pleated stone trousers"], "shoes": ["white leather sneakers"]},
+        "key_pieces": ["taupe unstructured blazer", "white tee", "pleated stone trousers", "white leather sneakers"],
+        "reasoning": "Modern ease that still reads intentional."
+      },
+      {
+        "style_name": "Classic Contrast",
+        "description": "A more traditional take — structured navy tailoring and crisp white for timeless polish outside the minimal lane.",
+        "key_pieces_categorized": {"top": ["navy blazer", "white oxford shirt"], "bottom": ["mid-grey wool trousers"], "shoes": ["brown leather loafers"]},
+        "key_pieces": ["navy blazer", "white oxford shirt", "mid-grey wool trousers", "brown leather loafers"],
+        "reasoning": "Offers classic variety beyond the user's usual minimalist preference."
+      }
+    ]
+  }
+]

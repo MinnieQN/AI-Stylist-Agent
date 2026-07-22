@@ -1,0 +1,97 @@
+{
+  "seed_outfits": [
+    {
+      "seed_id": "seed-tech-interview",
+      "occasion": "job interview at a tech startup",
+      "style": {
+        "style_name": "Modern Minimalist",
+        "description": "Clean-lined and contemporary with a muted palette, unstructured layers, and sleek silhouettes.",
+        "key_pieces": [
+          "black knit polo",
+          "tapered black trousers",
+          "minimal leather sneakers"
+        ],
+        "reasoning": "Reads current and intentional without feeling stiff."
+      }
+    },
+    {
+      "seed_id": "seed-beach-wedding",
+      "occasion": "beach wedding in Hawaii",
+      "style": {
+        "style_name": "Coastal Elegance",
+        "description": "Breathable linen in light tones with relaxed tailoring — refined but weather-appropriate.",
+        "key_pieces": [
+          "light linen shirt",
+          "beige linen trousers",
+          "leather sandals"
+        ],
+        "reasoning": "Elegant while suited to sand and heat."
+      }
+    },
+    {
+      "seed_id": "seed-casual-dinner",
+      "occasion": "casual dinner with friends",
+      "style": {
+        "style_name": "Relaxed Smart Casual",
+        "description": "Soft textures and easy layers — approachable warmth with a considered finish.",
+        "key_pieces": [
+          "camel crewneck sweater",
+          "dark chinos",
+          "suede loafers"
+        ],
+        "reasoning": "Comfortable but put-together for a social evening."
+      }
+    }
+  ],
+  "queries": [
+    {
+      "query_occasion": "job interview at a tech startup",
+      "expect_cache_hit": true,
+      "expect_grounding_hit": true,
+      "closest_seed": "seed-tech-interview",
+      "note": "exact repeat of a stored occasion — must cache-hit; if not, threshold or embedding is broken"
+    },
+    {
+      "query_occasion": "interview at a tech company",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": true,
+      "closest_seed": "seed-tech-interview",
+      "note": "BOUNDARY paraphrase — measured 0.836 with occasion-only vectors: below the 0.90 cache bar (deliberate: 0.90 means near-verbatim repeats only), well above grounding. If cache should catch paraphrases this loose, lower CACHE_THRESHOLD toward 0.82."
+    },
+    {
+      "query_occasion": "software engineer job interview",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": true,
+      "closest_seed": "seed-tech-interview",
+      "note": "related but not near-identical — should ground (~0.75) without cache-hitting"
+    },
+    {
+      "query_occasion": "outdoor wedding by the ocean",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": true,
+      "closest_seed": "seed-beach-wedding",
+      "note": "semantic paraphrase with no word overlap on 'beach/Hawaii' — tests semantic vs lexical matching"
+    },
+    {
+      "query_occasion": "dinner party at a friend's place",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": true,
+      "closest_seed": "seed-casual-dinner",
+      "note": "related social-dinner occasion — grounding should surface the casual dinner like"
+    },
+    {
+      "query_occasion": "gym workout session",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": false,
+      "closest_seed": null,
+      "note": "unrelated to all seeds — both retrievals must come back empty; false grounding hits here mean 0.75 is too loose"
+    },
+    {
+      "query_occasion": "court appearance for a traffic ticket",
+      "expect_cache_hit": false,
+      "expect_grounding_hit": false,
+      "closest_seed": null,
+      "note": "formal but semantically unrelated to any seed — tests that formality alone does not fake similarity"
+    }
+  ]
+}

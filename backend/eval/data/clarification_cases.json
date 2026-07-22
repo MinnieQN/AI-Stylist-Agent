@@ -1,0 +1,52 @@
+[
+  {
+    "occasion": "job interview at a bank",
+    "expected_clear": true,
+    "note": "clearly dressable, formality inferable"
+  },
+  {
+    "occasion": "beach wedding in Hawaii",
+    "expected_clear": true,
+    "note": "clear event + setting"
+  },
+  {
+    "occasion": "first date at a nice restaurant",
+    "expected_clear": true,
+    "note": "clear social occasion"
+  },
+  {
+    "occasion": "casual Friday at the office",
+    "expected_clear": true,
+    "note": "clear dress context"
+  },
+  {
+    "occasion": "dinner",
+    "expected_clear": true,
+    "note": "BOUNDARY: minimal but dressable — expect clear; if the gate asks for clarification here, criteria may be too strict"
+  },
+  {
+    "occasion": "asdf qwerty",
+    "expected_clear": false,
+    "note": "gibberish"
+  },
+  {
+    "occasion": "what's the weather today",
+    "expected_clear": false,
+    "note": "not an occasion — a question"
+  },
+  {
+    "occasion": "something nice",
+    "expected_clear": false,
+    "note": "too vague to determine formality"
+  },
+  {
+    "occasion": "an event",
+    "expected_clear": false,
+    "note": "BOUNDARY: maximally vague noun — expect unclear"
+  },
+  {
+    "occasion": "hello how are you",
+    "expected_clear": false,
+    "note": "greeting, not an occasion"
+  }
+]

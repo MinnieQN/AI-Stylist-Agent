@@ -1,0 +1,58 @@
+[
+  {
+    "occasion": "job interview at a bank",
+    "expected_tools": ["fetch_liked_history", "finalize_recommendations"],
+    "forbidden_tools": ["get_weather", "ask_clarification"],
+    "expect_clear": true,
+    "note": "indoor + formal + no location relevance — the canonical no-weather case"
+  },
+  {
+    "occasion": "outdoor wedding in Chicago in October",
+    "expected_tools": ["get_weather", "fetch_liked_history", "finalize_recommendations"],
+    "forbidden_tools": ["ask_clarification"],
+    "expect_clear": true,
+    "note": "outdoor + located + seasonal — the canonical weather case"
+  },
+  {
+    "occasion": "asdf qwerty",
+    "expected_tools": ["ask_clarification"],
+    "forbidden_tools": ["get_weather", "fetch_liked_history", "finalize_recommendations"],
+    "expect_clear": false,
+    "note": "gibberish — clarify immediately, call nothing else"
+  },
+  {
+    "occasion": "rooftop birthday party in Austin",
+    "expected_tools": ["get_weather", "fetch_liked_history", "finalize_recommendations"],
+    "forbidden_tools": ["ask_clarification"],
+    "expect_clear": true,
+    "note": "outdoor implied by 'rooftop' + located — weather expected without the word 'outdoor'"
+  },
+  {
+    "occasion": "dinner at an upscale restaurant downtown",
+    "expected_tools": ["fetch_liked_history", "finalize_recommendations"],
+    "forbidden_tools": ["get_weather", "ask_clarification"],
+    "expect_clear": true,
+    "note": "indoor despite 'downtown' sounding located — tests that a location word alone does not trigger weather"
+  },
+  {
+    "occasion": "picnic with friends this weekend",
+    "expected_tools": ["fetch_liked_history", "finalize_recommendations"],
+    "forbidden_tools": ["ask_clarification"],
+    "expect_clear": true,
+    "note": "BOUNDARY: outdoor but NO location given — get_weather deliberately in neither list; the tool needs a city, so calling it means the model invents a location (bad) and skipping it is correct, but we do not fail the run on this judgment call. Watch the trace and tighten the tool description if it hallucinates a city."
+  },
+  {
+    "occasion": "something nice",
+    "expected_tools": ["ask_clarification"],
+    "forbidden_tools": ["get_weather", "fetch_liked_history", "finalize_recommendations"],
+    "expect_clear": false,
+    "note": "too vague to determine formality — clarify, no other tools"
+  },
+  {
+    "occasion": "what should I cook for dinner tonight",
+    "expected_tools": ["ask_clarification"],
+    "forbidden_tools": ["get_weather", "fetch_liked_history", "finalize_recommendations"],
+    "expect_clear": false,
+    "note": "a real question but NOT a dressable occasion — tests non-occasion rejection, not just gibberish"
+  }
+]

@@ -1,6 +1,7 @@
 import os
 import base64
 import tempfile
+import threading
 import httpx
 from gradio_client import Client, handle_file
 
@@ -22,20 +23,47 @@ HF_SPACE = os.getenv("HF_SPACE", "your_username/IDM-VTON")
 # NOTE: if the Space is asleep, the first predict() after idle is slow
 # (cold start) — that's expected ZeroGPU behavior, not a bug.
 _client = None
+# creation lock: the warm-up thread and a try-on request can race to
+# connect — without this, both would construct a Client
+_client_lock = threading.Lock()
 
 def _get_client() -> Client:
     global _client
-    if _client is None:
-        # gradio_client >= 2.0 renamed hf_token → token.
-        # generous read timeout: a ZeroGPU Space asleep after idle takes
-        # minutes to cold-start — the default timeout gave up mid-boot and
-        # every first-try-on-of-the-day silently degraded to pix2pix
-        _client = Client(
-            HF_SPACE,
-            token=os.getenv("HF_TOKEN"),
-            httpx_kwargs={"timeout": httpx.Timeout(300.0, connect=30.0)},
-        )
-    return _client
+    with _client_lock:
+        if _client is None:
+            # gradio_client >= 2.0 renamed hf_token → token.
+            # generous read timeout: a ZeroGPU Space asleep after idle takes
+            # minutes to cold-start — the default timeout gave up mid-boot and
+            # every first-try-on-of-the-day silently degraded to pix2pix
+            _client = Client(
+                HF_SPACE,
+                token=os.getenv("HF_TOKEN"),
+                httpx_kwargs={"timeout": httpx.Timeout(300.0, connect=30.0)},
+            )
+        return _client
+
+
+"""
+Fire-and-forget Space warm-up: connecting the gradio client makes HF
+start a sleeping ZeroGPU Space, so calling this when the user reaches
+UploadPage overlaps the multi-minute cold start with the time they
+spend picking and uploading a photo (latency hiding). Waking costs no
+GPU quota — only inference does. Returns immediately; failures are
+non-fatal (the try-on call will retry the connection itself).
+"""
+def warmup_space() -> None:
+    if _client is not None:
+        return  # already connected — nothing to warm
+
+    def _connect():
+        try:
+            _get_client()
+            print("IDM-VTON Space is warm.")
+        except Exception as error:
+            # leave _client as None — the next warm-up or try-on retries
+            print(f"IDM-VTON warm-up failed (non-fatal): {error}")
+
+    threading.Thread(target=_connect, daemon=True).start()
 
 
 """

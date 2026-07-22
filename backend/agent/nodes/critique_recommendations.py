@@ -13,8 +13,8 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 
 """
 Node: critique_recommendations
-Generator-critic judge. Reviews the 3 recommendations that reason_outfit
-just produced against three criteria:
+Generator-critic judge. Reviews the 3 recommendations the stylist agent
+just finalized against three criteria:
 1. Distinctness — are the 3 styles genuinely different in character?
 2. Constraint fit — do they match the analysis formality, and do their
    key_pieces cover all needed_items categories?

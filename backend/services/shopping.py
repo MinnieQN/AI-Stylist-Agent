@@ -10,8 +10,8 @@ Reduce a free-form key piece to a clean product search phrase.
 The LLM emits descriptive text like
 "high-waisted wide-leg trousers in a pastel shade (e.g., pale yellow) or chinos"
 — parentheticals and "or" alternatives pollute Google Shopping queries
-(they pull outfit sets and mismatched garment types), so keep only the
-first alternative and drop the notes.
+(they pull outfit sets and mismatched garment types), so drop the notes
+and keep only the LAST "or" alternative (see comment below for why last).
 @param piece: raw key piece text from the recommendation
 @return: cleaned search phrase, e.g. "high-waisted wide-leg trousers in a pastel shade"
 """

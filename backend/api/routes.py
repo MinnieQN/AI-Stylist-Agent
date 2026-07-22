@@ -4,8 +4,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from agent.graph import graph
-from services.tryon_vton import idm_vton_tryon, chained_tryon
-from services.gemini import generate_tryon_image
+from services.tryon_vton import idm_vton_tryon, chained_tryon, warmup_space
+from services.pix2pix import generate_tryon_image
 from services.shopping import search_garment, categorize_key_pieces
 from services.mongo import liked_outfits
 from services.cache import check_cache
@@ -151,6 +151,15 @@ async def upload_image(file: UploadFile = File(...)):
         "filepath": str(file_path),
         "message": "File uploaded successfully."
     }
+# handle POST request to pre-warm the try-on GPU Space.
+# Fired by UploadPage on mount so a sleeping Space cold-starts WHILE the
+# user picks their photo instead of after they click Generate.
+# Fire-and-forget: returns immediately, never errors the client.
+@router.post("/tryon/warmup")
+def warmup_tryon():
+    warmup_space()
+    return {"message": "warming"}
+
 # Pydantic model for the request body
 class TryOnRequest(BaseModel):
     style: dict
@@ -241,12 +250,11 @@ def like_outfit(request: LikeRequest):
     # insert into Mongo
     liked_outfits.insert_one(document)
 
-    # embed liked outfit — occasion + style_name ONLY (occasion-dominant by
-    # design): the cache queries with occasion-only text, and mixing the long
-    # description into this vector diluted the occasion so much that even a
-    # near-identical occasion couldn't reach the cache threshold
-    embed_input = f"{request.occasion} {request.style['style_name']}"
-    vector = embed_texts([embed_input])[0]
+    # embed liked outfit — occasion ONLY, symmetric with the cache query.
+    # Measured (eval_retrieval): appending style_name cost ~0.17 similarity,
+    # so an EXACT occasion repeat scored 0.825 and the 0.90 cache threshold
+    # was unreachable; occasion-only scores 1.0 on exact repeats.
+    vector = embed_texts([request.occasion])[0]
 
     # upsert to Qdrant
     client.upsert(

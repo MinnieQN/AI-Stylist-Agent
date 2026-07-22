@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ImageUpload from '../components/ImageUpload';
+import api from '../api/axios';
 
 /**
  * Upload page for user to upload a full-body image to the backend for try-on image generation.
@@ -12,6 +13,13 @@ export default function UploadPage() {
     const location = useLocation();
     const [filename, setFileName] = useState('');
     const [filepath, setFilePath] = useState('');
+
+    // wake the try-on GPU Space now — the multi-minute cold start runs
+    // while the user picks their photo instead of after they click
+    // Generate (latency hiding; fire-and-forget, failures are non-fatal)
+    useEffect(() => {
+        api.post('/tryon/warmup').catch(() => {});
+    }, []);
 
     // handle empty state
     if (!location.state || !location.state.selectedStyle) {

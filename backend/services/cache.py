@@ -12,7 +12,7 @@ Semantic cache lookup for a previously liked outfit.
 
 Embeds the incoming occasion and searches the user's liked_outfits in Qdrant
 for the single closest match. If that match's similarity score meets or exceeds
-CACHE_THRESHOLD (0.95), the occasion is considered essentially identical to one
+CACHE_THRESHOLD (env, 0.90), the occasion is considered essentially identical to one
 the user already liked, so the full stored record (including the try-on image)
 is fetched from MongoDB and returned — letting the caller skip the agent and
 image generation entirely. Returns None on a cache miss.
